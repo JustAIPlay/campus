@@ -4,9 +4,10 @@ import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
-import { ArrowLeft, MessageCircle, Lightbulb, Users, BookOpen, Coffee, TreePine, Crown, Music, Palette, Flower, Building, Heart } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Lightbulb, Users, BookOpen, Coffee, TreePine, Crown, Music, Palette, Flower, Building, Heart, Target, Play } from 'lucide-react';
 import { aiService, useAIServiceStore, createMessage, type ChatMessage } from './services/aiService';
 import { TypingEffect, AIThinking } from './components/ui/typing-effect';
+import { type Scenario, type PhaseKey, type Objective, AVAILABLE_SCENARIOS } from './domain/scenarios';
 
 // 场景数据
 const scenes = [
@@ -389,9 +390,15 @@ const scenes = [
 ];
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'home' | 'scene' | 'chat'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'scene' | 'chat' | 'training'>('home');
   const [selectedScene, setSelectedScene] = useState<typeof scenes[0] | null>(null);
   const [selectedNPC, setSelectedNPC] = useState<typeof scenes[0]['npcs'][0] | null>(null);
+  
+  // 新增训练场景状态
+  const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null);
+  const [currentPhase, setCurrentPhase] = useState<PhaseKey>('opening');
+  const [isTrainingMode, setIsTrainingMode] = useState(false);
+  
   const [chatMessages, setChatMessages] = useState<Array<{id: string, sender: 'npc' | 'user' | 'ai', content: string}>>([]);
   const [showAIHelp, setShowAIHelp] = useState(false);
   const [userInput, setUserInput] = useState('');
@@ -431,8 +438,37 @@ export default function App() {
     setCurrentView('chat');
   };
 
+  // 启动训练场景
+  const startTrainingScenario = (scenario: Scenario) => {
+    setCurrentScenario(scenario);
+    setCurrentPhase('opening');
+    setIsTrainingMode(true);
+    
+    // 使用场景的启动提示作为初始消息
+    setChatMessages([
+      {
+        id: '1',
+        sender: 'npc',
+        content: scenario.starterPrompt
+      }
+    ]);
+    setCurrentView('training');
+  };
+
+  // 重置到普通聊天模式
+  const exitTrainingMode = () => {
+    setIsTrainingMode(false);
+    setCurrentScenario(null);
+    setCurrentPhase('opening');
+    setChatMessages([]);
+  };
+
   const sendMessage = async () => {
-    if (!userInput.trim() || !selectedNPC) return;
+    if (!userInput.trim()) return;
+    
+    // 训练模式下需要scenario，普通聊天模式需要selectedNPC
+    if (isTrainingMode && !currentScenario) return;
+    if (!isTrainingMode && !selectedNPC) return;
 
     const newUserMessage = {
       id: Date.now().toString(),
@@ -476,16 +512,35 @@ export default function App() {
         timestamp: Date.now()
       });
 
-      // 调用AI服务
-      const aiResponse = await aiService.sendMessage(
-        conversationHistory,
-        {
-          name: selectedNPC.name,
-          role: selectedNPC.role,
-          personality: selectedNPC.personality,
-          topics: selectedNPC.topics
-        }
-      );
+      let aiResponse: string;
+      
+      if (isTrainingMode && currentScenario) {
+        // 训练模式：基于scenario和当前phase构建NPC信息
+        const currentPhaseConfig = currentScenario.phases[currentPhase];
+        const enhancedNpcInfo = {
+          name: currentScenario.roleCard.name,
+          role: currentScenario.roleCard.role,
+          personality: currentScenario.roleCard.personality,
+          topics: [],
+          background: currentScenario.roleCard.background,
+          scenario: currentScenario.title,
+          currentPhase: currentPhaseConfig?.intent || currentPhase,
+          coachingTips: currentPhaseConfig?.coachingTips || []
+        };
+        
+        aiResponse = await aiService.sendMessage(conversationHistory, enhancedNpcInfo);
+      } else {
+        // 普通聊天模式：使用原有逻辑
+        aiResponse = await aiService.sendMessage(
+          conversationHistory,
+          {
+            name: selectedNPC!.name,
+            role: selectedNPC!.role,
+            personality: selectedNPC!.personality,
+            topics: selectedNPC!.topics
+          }
+        );
+      }
 
       // 移除思考状态消息，添加AI回复
       setChatMessages(prev => {
@@ -564,6 +619,31 @@ export default function App() {
           <div className="text-center mb-8 lg:mb-12">
             <h1 className="text-3xl lg:text-4xl mb-2">🏫 校园社交训练</h1>
             <p className="text-muted-foreground lg:text-lg">选择一个场景开始练习社交技能</p>
+            
+            {/* 训练模式入口 */}
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+              <Button 
+                onClick={() => {
+                  // 直接启动第一个可用的训练场景
+                  if (AVAILABLE_SCENARIOS.length > 0) {
+                    startTrainingScenario(AVAILABLE_SCENARIOS[0]);
+                  }
+                }}
+                className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                size="lg"
+              >
+                <Target className="w-5 h-5" />
+                开始目标训练
+              </Button>
+              <Button 
+                variant="outline" 
+                size="lg"
+                className="flex items-center gap-2"
+              >
+                <Play className="w-5 h-5" />
+                自由聊天模式
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0 xl:grid-cols-3">
@@ -682,6 +762,130 @@ export default function App() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'training' && currentScenario) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 flex flex-col">
+        <div className="flex-1 max-w-md mx-auto lg:max-w-4xl w-full flex flex-col">
+          {/* 训练头部 - 显示目标和进度 */}
+          <div className="bg-white/90 backdrop-blur-sm border-b p-4 lg:p-6">
+            <div className="flex items-center justify-between mb-3">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  exitTrainingMode();
+                  setCurrentView('home');
+                }}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                退出训练
+              </Button>
+              
+              <div className="flex items-center gap-2">
+                <Target className="w-5 h-5 text-purple-600" />
+                <span className="font-semibold text-purple-800">{currentScenario.title}</span>
+              </div>
+            </div>
+            
+            {/* 训练目标展示 */}
+            <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg p-3 mb-3">
+              <h4 className="font-medium text-sm mb-2 text-purple-800">🎯 训练目标</h4>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(currentScenario.objectives).map(([key, objective]) => (
+                  <Badge key={key} variant="secondary" className="text-xs">
+                    {(objective as Objective).description}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            
+            {/* 阶段进度 */}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">当前阶段:</span>
+              <Badge variant="outline" className="bg-white">
+                {currentScenario.phases[currentPhase]?.intent || currentPhase}
+              </Badge>
+            </div>
+          </div>
+
+          {/* 聊天消息 */}
+          <div className="flex-1 p-4 lg:p-6 overflow-y-auto space-y-3 lg:space-y-4">
+            {chatMessages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex items-end gap-2 ${
+                  message.sender === 'user' ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                {/* NPC头像 - 左侧显示 */}
+                {message.sender === 'npc' && (
+                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 flex-shrink-0">
+                    <ImageWithFallback
+                      src={currentScenario.assets.npcAvatar}
+                      alt={currentScenario.roleCard.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                
+                <div
+                  className={`max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 lg:px-4 lg:py-3 relative ${
+                    message.sender === 'user'
+                      ? 'bg-purple-500 text-white rounded-br-md'
+                      : message.sender === 'ai'
+                      ? 'bg-blue-100 text-blue-900 border border-blue-200 rounded-bl-md'
+                      : 'bg-white text-gray-900 rounded-bl-md border shadow-sm'
+                  }`}
+                >
+                  {message.sender === 'ai' && (
+                    <div className="flex items-center gap-1 mb-1">
+                      <Lightbulb className="w-3 h-3 lg:w-4 lg:h-4" />
+                      <span className="text-xs lg:text-sm font-medium">AI助手建议</span>
+                    </div>
+                  )}
+                  <p className="text-sm lg:text-base leading-relaxed">{message.content}</p>
+                </div>
+                
+                {/* 用户头像 - 右侧显示 */}
+                {message.sender === 'user' && (
+                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-purple-200 border border-purple-300 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <ImageWithFallback
+                      src="images-webp/avatar/student_grace.webp"
+                      alt="Grace"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 输入区域 */}
+          <div className="p-4 lg:p-6 bg-white border-t">
+            <div className="flex gap-2 lg:gap-3">
+              <input
+                type="text"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                placeholder="输入你的回应..."
+                className="flex-1 px-3 py-2 lg:px-4 lg:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm lg:text-base"
+                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+              />
+              <Button 
+                onClick={sendMessage} 
+                disabled={!userInput.trim()}
+                className="lg:px-6 bg-purple-500 hover:bg-purple-600"
+              >
+                发送
+              </Button>
             </div>
           </div>
         </div>
@@ -818,6 +1022,29 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* 内联建议气泡 */}
+          {currentScenario && currentScenario.phases[currentPhase]?.coachingTips && currentScenario.phases[currentPhase].coachingTips.length > 0 && (
+            <div className="px-4 lg:px-6 py-2 bg-gradient-to-r from-blue-50 to-purple-50 border-t border-blue-100">
+              <div className="flex items-center gap-2 mb-2">
+                <Lightbulb className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">💡 建议回复</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {currentScenario.phases[currentPhase].coachingTips.map((tip, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setUserInput(tip);
+                    }}
+                    className="px-3 py-1.5 bg-white border border-blue-200 rounded-full text-sm text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-pointer shadow-sm"
+                  >
+                    {tip}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 输入区域 */}
           <div className="p-4 lg:p-6 bg-white border-t">
