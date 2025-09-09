@@ -116,7 +116,7 @@ const scenes = [
         name: 'Ms. Zhang',
         role: '图书管理员',
         personality: '温柔细心',
-        avatar: 'images-webp/avatar/english_teacher.webp',
+        avatar: 'images-webp/avatar/图书管理员.webp',
         topics: [
           '小朋友，需要找什么书吗？',
           '记得轻声说话，保持安静哦',
@@ -151,7 +151,7 @@ const scenes = [
         name: '食堂阿姨',
         role: '食堂工作人员',
         personality: '亲切热情',
-        avatar: '👩‍🍳',
+        avatar: 'images-webp/avatar/食堂阿姨.webp',
         topics: [
           '今天想吃什么呀？',
           '多吃蔬菜对身体好哦',
@@ -199,7 +199,7 @@ const scenes = [
         name: '秘书阿姨',
         role: '办公室秘书',
         personality: '细致认真',
-        avatar: '👩‍💻',
+        avatar: 'images-webp/avatar/校长办公室秘书.webp',
         topics: [
           '请在这里等一下，校长马上就来',
           '需要填写这个表格吗？',
@@ -221,7 +221,7 @@ const scenes = [
         name: 'Ms. Li',
         role: '音乐老师',
         personality: '活泼有趣',
-        avatar: 'images-webp/avatar/math_teacher.webp',
+        avatar: 'images-webp/avatar/音乐老师.webp',
         topics: [
           '今天我们来学一首新歌好吗？',
           '音乐可以表达我们的情感',
@@ -256,7 +256,7 @@ const scenes = [
         name: '张美术老师',
         role: '美术老师',
         personality: '创意温和',
-        avatar: '👨‍🎨',
+        avatar: 'images-webp/avatar/美术老师.webp',
         topics: [
           '今天我们画什么主题呢？',
           '艺术没有对错，发挥你的想象力',
@@ -291,7 +291,7 @@ const scenes = [
         name: '园丁爷爷',
         role: '校园园丁',
         personality: '慈祥博学',
-        avatar: '👨‍🌾',
+        avatar: 'images-webp/avatar/园丁爷爷.webp',
         topics: [
           '小朋友，这些花漂亮吗？',
           '植物需要阳光和水才能长大',
@@ -326,7 +326,7 @@ const scenes = [
         name: '值日老师',
         role: '值日教师',
         personality: '负责严格',
-        avatar: '👨‍🏫',
+        avatar: 'images-webp/avatar/值日老师.webp',
         topics: [
           '走廊里不要跑，注意安全',
           '上课铃响了，快回教室吧',
@@ -361,7 +361,7 @@ const scenes = [
         name: '校医阿姨',
         role: '校医',
         personality: '温柔关怀',
-        avatar: '👩‍⚕️',
+        avatar: 'images-webp/avatar/校医阿姨.webp',
         topics: [
           '哪里不舒服呀？告诉阿姨',
           '喝点温水，休息一下就好了',
@@ -374,7 +374,7 @@ const scenes = [
         name: '身体不适的同学',
         role: '同学',
         personality: '虚弱需要关心',
-        avatar: '🤒',
+        avatar: 'images-webp/avatar/生病学生.webp',
         topics: [
           '我头有点晕...',
           '谢谢你陪我来医务室',
