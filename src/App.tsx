@@ -5,6 +5,8 @@ import { Badge } from './components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
 import { ArrowLeft, MessageCircle, Lightbulb, Users, BookOpen, Coffee, TreePine, Crown, Music, Palette, Flower, Building, Heart } from 'lucide-react';
+import { aiService, useAIServiceStore, createMessage, type ChatMessage } from './services/aiService';
+import { TypingEffect, AIThinking } from './components/ui/typing-effect';
 
 // 场景数据
 const scenes = [
@@ -395,6 +397,9 @@ export default function App() {
   const [userInput, setUserInput] = useState('');
   const [backgroundLoaded, setBackgroundLoaded] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  
+  // AI服务状态
+  const { isLoading: aiLoading, error: aiError } = useAIServiceStore();
 
   useEffect(() => {
     const handleResize = () => {
@@ -426,7 +431,7 @@ export default function App() {
     setCurrentView('chat');
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!userInput.trim() || !selectedNPC) return;
 
     const newUserMessage = {
@@ -434,27 +439,79 @@ export default function App() {
       sender: 'user' as const,
       content: userInput
     };
-
     setChatMessages(prev => [...prev, newUserMessage]);
+    setUserInput('');
 
-    // 模拟NPC回复
-    setTimeout(() => {
-      const responses = [
-        '很好的回答！',
-        '我明白了，谢谢你的分享',
-        '这是一个好想法',
-        '我们继续聊聊别的吧',
-        '你说得对！'
-      ];
-      const npcResponse = {
+    // 检查AI服务是否配置
+    if (!aiService.isConfigured()) {
+      const errorMessage = createMessage('assistant', '⚠️ AI服务未配置，请在.env文件中设置VITE_SILICONFLOW_API_KEY');
+      setChatMessages(prev => [...prev, errorMessage]);
+      return;
+    }
+
+    try {
+      // 显示AI正在思考的状态
+      const thinkingMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'npc' as const,
-        content: responses[Math.floor(Math.random() * responses.length)]
+        content: '正在思考中...'
       };
-      setChatMessages(prev => [...prev, npcResponse]);
-    }, 1000);
+      setChatMessages(prev => [...prev, thinkingMessage]);
 
-    setUserInput('');
+      // 构建对话历史（转换格式）
+      const conversationHistory: ChatMessage[] = chatMessages
+        .filter(msg => !msg.content.includes('正在思考中'))
+        .map(msg => ({
+          id: msg.id,
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+          timestamp: parseInt(msg.id) || Date.now()
+        }));
+      
+      // 添加当前用户消息
+      conversationHistory.push({
+        id: newUserMessage.id,
+        role: 'user',
+        content: newUserMessage.content,
+        timestamp: Date.now()
+      });
+
+      // 调用AI服务
+      const aiResponse = await aiService.sendMessage(
+        conversationHistory,
+        {
+          name: selectedNPC.name,
+          role: selectedNPC.role,
+          personality: selectedNPC.personality,
+          topics: selectedNPC.topics
+        }
+      );
+
+      // 移除思考状态消息，添加AI回复
+      setChatMessages(prev => {
+        const withoutThinking = prev.filter(msg => !msg.content.includes('正在思考中'));
+        const npcResponse = {
+          id: (Date.now() + 1).toString(),
+          sender: 'npc' as const,
+          content: aiResponse
+        };
+        return [...withoutThinking, npcResponse];
+      });
+
+    } catch (error) {
+      console.error('AI服务调用失败:', error);
+      
+      // 移除思考状态消息，显示错误信息
+      setChatMessages(prev => {
+        const withoutThinking = prev.filter(msg => !msg.content.includes('正在思考中'));
+        const errorMessage = {
+          id: (Date.now() + 1).toString(),
+          sender: 'npc' as const,
+          content: '抱歉，我现在有点忙，稍后再聊吧！'
+        };
+        return [...withoutThinking, errorMessage];
+      });
+    }
   };
 
   const getAIAdvice = () => {
@@ -679,15 +736,32 @@ export default function App() {
             {chatMessages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex items-end gap-2 ${
+                  message.sender === 'user' ? 'justify-end' : 'justify-start'
+                }`}
               >
+                {/* NPC头像 - 左侧显示 */}
+                {message.sender === 'npc' && (
+                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 flex-shrink-0">
+                    {selectedNPC?.avatar.includes('.webp') ? (
+                      <ImageWithFallback
+                        src={selectedNPC.avatar}
+                        alt={selectedNPC.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-sm lg:text-base">{selectedNPC?.avatar}</div>
+                    )}
+                  </div>
+                )}
+                
                 <div
-                  className={`max-w-[80%] lg:max-w-[70%] rounded-lg p-3 lg:p-4 ${
+                  className={`max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 lg:px-4 lg:py-3 relative ${
                     message.sender === 'user'
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'bg-pink-200 text-gray-900 rounded-br-md border border-pink-300'
                       : message.sender === 'ai'
-                      ? 'bg-yellow-100 text-yellow-900 border border-yellow-200'
-                      : 'bg-white shadow-sm'
+                      ? 'bg-yellow-100 text-yellow-900 border border-yellow-200 rounded-bl-md'
+                      : 'bg-gray-100 text-gray-900 rounded-bl-md border border-gray-200'
                   }`}
                 >
                   {message.sender === 'ai' && (
@@ -696,10 +770,53 @@ export default function App() {
                       <span className="text-xs lg:text-sm font-medium">AI助手建议</span>
                     </div>
                   )}
-                  <p className="text-sm lg:text-base">{message.content}</p>
+                  {message.sender === 'ai' ? (
+                    <TypingEffect text={message.content} className="text-sm lg:text-base" />
+                  ) : (
+                    <p className="text-sm lg:text-base leading-relaxed">{message.content}</p>
+                  )}
                 </div>
+                
+                {/* 用户头像 - 右侧显示 */}
+                {message.sender === 'user' && (
+                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-pink-200 border border-pink-300 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <ImageWithFallback
+                      src="images-webp/avatar/student_grace.webp"
+                      alt="Grace"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
               </div>
             ))}
+            
+            {/* AI思考状态 */}
+            {aiLoading && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] lg:max-w-[70%] rounded-lg p-3 lg:p-4 bg-yellow-50 border border-yellow-200">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Lightbulb className="w-3 h-3 lg:w-4 lg:h-4 text-yellow-600" />
+                    <span className="text-xs lg:text-sm font-medium text-yellow-800">AI助手</span>
+                  </div>
+                  <AIThinking />
+                </div>
+              </div>
+            )}
+            
+            {/* AI错误状态 */}
+            {aiError && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] lg:max-w-[70%] rounded-lg p-3 lg:p-4 bg-red-50 border border-red-200">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Lightbulb className="w-3 h-3 lg:w-4 lg:h-4 text-red-600" />
+                    <span className="text-xs lg:text-sm font-medium text-red-800">AI助手</span>
+                  </div>
+                  <p className="text-sm lg:text-base text-red-700">
+                    抱歉，AI助手暂时无法回复。请稍后再试。
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 输入区域 */}
