@@ -7,7 +7,9 @@ import { ImageWithFallback } from './components/figma/ImageWithFallback';
 import { ArrowLeft, MessageCircle, Lightbulb, Users, BookOpen, Coffee, TreePine, Crown, Music, Palette, Flower, Building, Heart, Target, Play } from 'lucide-react';
 import { aiService, useAIServiceStore, createMessage, type ChatMessage } from './services/aiService';
 import { TypingEffect, AIThinking } from './components/ui/typing-effect';
-import { type Scenario, type PhaseKey, type Objective, AVAILABLE_SCENARIOS } from './domain/scenarios';
+import { type Scenario, type PhaseKey, type Objective, AVAILABLE_SCENARIOS, TrainingScenarioTemplate, generateScenario } from './domain/scenarios';
+import { TrainingScenarioSelector } from './components/ui/training-scenario-selector';
+import { NPCId } from './domain/npcs/personas';
 
 // 场景数据
 const scenes = [
@@ -116,7 +118,7 @@ const scenes = [
     npcs: [
       {
         id: 'librarian',
-        name: 'Ms. Zhang',
+        name: 'Ms. Chen',
         role: '图书管理员',
         personality: '温柔细心',
         avatar: 'images-webp/avatar/图书管理员.webp',
@@ -151,10 +153,10 @@ const scenes = [
     npcs: [
       {
         id: 'cafeteria_staff',
-        name: '食堂阿姨',
+        name: 'Aunt Mary',
         role: '食堂工作人员',
         personality: '亲切热情',
-        avatar: 'images-webp/avatar/食堂阿姨.webp',
+        avatar: 'images-webp/avatar/cafeteria_staff.webp',
         topics: [
           '今天想吃什么呀？',
           '多吃蔬菜对身体好哦',
@@ -186,7 +188,7 @@ const scenes = [
     npcs: [
       {
         id: 'principal',
-        name: 'Principal Chen',
+        name: 'Principal Zhang',
         role: '校长',
         personality: '严肃权威',
         avatar: 'images-webp/avatar/principal.webp',
@@ -199,10 +201,10 @@ const scenes = [
       },
       {
         id: 'secretary',
-        name: '秘书阿姨',
+        name: 'Ms. Liu',
         role: '办公室秘书',
         personality: '细致认真',
-        avatar: 'images-webp/avatar/校长办公室秘书.webp',
+        avatar: 'images-webp/avatar/secretary.webp',
         topics: [
           '请在这里等一下，校长马上就来',
           '需要填写这个表格吗？',
@@ -221,10 +223,10 @@ const scenes = [
     npcs: [
       {
         id: 'music_teacher',
-        name: 'Ms. Li',
+        name: 'Ms. Song',
         role: '音乐老师',
         personality: '活泼有趣',
-        avatar: 'images-webp/avatar/音乐老师.webp',
+        avatar: 'images-webp/avatar/music_teacher.webp',
         topics: [
           '今天我们来学一首新歌好吗？',
           '音乐可以表达我们的情感',
@@ -256,10 +258,10 @@ const scenes = [
     npcs: [
       {
         id: 'art_teacher',
-        name: '张美术老师',
+        name: 'Mr. Art',
         role: '美术老师',
         personality: '创意温和',
-        avatar: 'images-webp/avatar/美术老师.webp',
+        avatar: 'images-webp/avatar/art_teacher.webp',
         topics: [
           '今天我们画什么主题呢？',
           '艺术没有对错，发挥你的想象力',
@@ -269,7 +271,7 @@ const scenes = [
       },
       {
         id: 'artistic_student',
-        name: 'Henry',
+        name: 'Linda',
         role: '同学',
         personality: '有创意内向',
         avatar: 'images-webp/avatar/student_linda.webp',
@@ -291,10 +293,10 @@ const scenes = [
     npcs: [
       {
         id: 'gardener',
-        name: '园丁爷爷',
+        name: 'Uncle Green',
         role: '校园园丁',
         personality: '慈祥博学',
-        avatar: 'images-webp/avatar/园丁爷爷.webp',
+        avatar: 'images-webp/avatar/gardener.webp',
         topics: [
           '小朋友，这些花漂亮吗？',
           '植物需要阳光和水才能长大',
@@ -326,10 +328,10 @@ const scenes = [
     npcs: [
       {
         id: 'discipline_teacher',
-        name: '值日老师',
+        name: 'Mr. Strict',
         role: '值日教师',
         personality: '负责严格',
-        avatar: 'images-webp/avatar/值日老师.webp',
+        avatar: 'images-webp/avatar/discipline_teacher.webp',
         topics: [
           '走廊里不要跑，注意安全',
           '上课铃响了，快回教室吧',
@@ -361,7 +363,7 @@ const scenes = [
     npcs: [
       {
         id: 'school_nurse',
-        name: '校医阿姨',
+        name: 'Nurse Kate',
         role: '校医',
         personality: '温柔关怀',
         avatar: 'images-webp/avatar/校医阿姨.webp',
@@ -390,16 +392,16 @@ const scenes = [
 ];
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'home' | 'scene' | 'chat' | 'training'>('home');
-  const [selectedScene, setSelectedScene] = useState<typeof scenes[0] | null>(null);
-  const [selectedNPC, setSelectedNPC] = useState<typeof scenes[0]['npcs'][0] | null>(null);
+  const [currentView, setCurrentView] = useState('home' as 'home' | 'scene' | 'chat' | 'training' | 'training-selector');
+  const [selectedScene, setSelectedScene] = useState(null as typeof scenes[0] | null);
+  const [selectedNPC, setSelectedNPC] = useState(null as typeof scenes[0]['npcs'][0] | null);
   
   // 新增训练场景状态
-  const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null);
-  const [currentPhase, setCurrentPhase] = useState<PhaseKey>('opening');
+  const [currentScenario, setCurrentScenario] = useState(null as Scenario | null);
+  const [currentPhase, setCurrentPhase] = useState('opening' as PhaseKey);
   const [isTrainingMode, setIsTrainingMode] = useState(false);
   
-  const [chatMessages, setChatMessages] = useState<Array<{id: string, sender: 'npc' | 'user' | 'ai' | 'narrator', content: string}>>([]);
+  const [chatMessages, setChatMessages] = useState([] as ChatMessage[]);
   const [showAIHelp, setShowAIHelp] = useState(false);
   const [userInput, setUserInput] = useState('');
   const [backgroundLoaded, setBackgroundLoaded] = useState(false);
@@ -423,6 +425,13 @@ export default function App() {
     img.onload = () => setBackgroundLoaded(true);
     img.onerror = () => setBackgroundLoaded(true); // 即使加载失败也继续显示
     img.src = '/images-webp/school.webp';
+    
+    // 设置超时，确保页面不会一直卡在加载状态
+    const timeout = setTimeout(() => {
+      setBackgroundLoaded(true);
+    }, 2000); // 2秒后强制显示页面
+    
+    return () => clearTimeout(timeout);
   }, []);
 
   const startChat = (npc: typeof scenes[0]['npcs'][0]) => {
@@ -431,8 +440,10 @@ export default function App() {
     setChatMessages([
       {
         id: '1',
-        sender: 'npc',
-        content: initialTopic
+        role: 'assistant',
+        content: initialTopic,
+        timestamp: Date.now(),
+        sender: 'npc'
       }
     ]);
     setCurrentView('chat');
@@ -450,16 +461,34 @@ export default function App() {
     setChatMessages([
       {
         id: String(now),
-        sender: 'narrator',
-        content: `${scenario.sceneName} · 开场：${scenario.description}`
+        role: 'system',
+        content: `${scenario.sceneName} · 开场：${scenario.description}`,
+        timestamp: now,
+        sender: 'narrator'
       },
       {
         id: String(now + 1),
-        sender: 'npc',
-        content: npcOpening
+        role: 'assistant',
+        content: npcOpening,
+        timestamp: now + 1,
+        sender: 'npc'
       }
     ]);
     setCurrentView('training');
+  };
+
+  // 处理训练场景选择
+  const handleTrainingScenarioSelect = (template: TrainingScenarioTemplate, npcId: NPCId) => {
+    const generatedScenario = generateScenario({
+      template,
+      selectedNPC: npcId
+    });
+    startTrainingScenario(generatedScenario);
+  };
+
+  // 显示训练场景选择器
+  const showTrainingSelector = () => {
+    setCurrentView('training-selector');
   };
 
   // 重置到普通聊天模式
@@ -479,8 +508,10 @@ export default function App() {
 
     const newUserMessage = {
       id: Date.now().toString(),
-      sender: 'user' as const,
-      content: userInput
+      role: 'user' as const,
+      content: userInput,
+      timestamp: Date.now(),
+      sender: 'user' as const
     };
     setChatMessages(prev => [...prev, newUserMessage]);
     setUserInput('');
@@ -496,8 +527,10 @@ export default function App() {
       // 显示AI正在思考的状态
       const thinkingMessage = {
         id: (Date.now() + 1).toString(),
-        sender: 'npc' as const,
-        content: '正在思考中...'
+        role: 'assistant' as const,
+        content: '正在思考中...',
+        timestamp: Date.now(),
+        sender: 'npc' as const
       };
       setChatMessages(prev => [...prev, thinkingMessage]);
 
@@ -508,7 +541,8 @@ export default function App() {
           id: msg.id,
           role: msg.sender === 'user' ? 'user' : 'assistant',
           content: msg.content,
-          timestamp: parseInt(msg.id) || Date.now()
+          timestamp: parseInt(msg.id) || Date.now(),
+          sender: msg.sender || 'ai'
         }));
       
       // 添加当前用户消息
@@ -555,8 +589,10 @@ export default function App() {
         const withoutThinking = prev.filter(msg => !msg.content.includes('正在思考中'));
         const npcResponse = {
           id: (Date.now() + 1).toString(),
-          sender: 'npc' as const,
-          content: aiResponse
+          role: 'assistant' as const,
+          content: aiResponse,
+          timestamp: Date.now(),
+          sender: 'npc' as const
         };
         return [...withoutThinking, npcResponse];
       });
@@ -569,8 +605,10 @@ export default function App() {
         const withoutThinking = prev.filter(msg => !msg.content.includes('正在思考中'));
         const errorMessage = {
           id: (Date.now() + 1).toString(),
-          sender: 'npc' as const,
-          content: '抱歉，我现在有点忙，稍后再聊吧！'
+          role: 'assistant' as const,
+          content: '抱歉，我现在有点忙，稍后再聊吧！',
+          timestamp: Date.now(),
+          sender: 'npc' as const
         };
         return [...withoutThinking, errorMessage];
       });
@@ -592,8 +630,10 @@ export default function App() {
     
     const aiMessage = {
       id: (Date.now() + 2).toString(),
-      sender: 'ai' as const,
-      content: randomAdvice
+      role: 'assistant' as const,
+      content: randomAdvice,
+      timestamp: Date.now(),
+      sender: 'ai' as const
     };
 
     setChatMessages(prev => [...prev, aiMessage]);
@@ -624,33 +664,80 @@ export default function App() {
         }}
       >
         <div className="max-w-md mx-auto lg:max-w-6xl relative z-10">
-          <div className="text-center mb-8 lg:mb-12">
+          <div className="text-center mb-6 lg:mb-8">
             <h1 className="text-3xl lg:text-4xl mb-2">🏫 校园社交训练</h1>
             <p className="text-muted-foreground lg:text-lg">选择一个场景开始练习社交技能</p>
-            
-            {/* 训练模式入口 */}
-            <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-              <Button 
-                onClick={() => {
-                  // 直接启动第一个可用的训练场景
-                  if (AVAILABLE_SCENARIOS.length > 0) {
-                    startTrainingScenario(AVAILABLE_SCENARIOS[0]);
-                  }
-                }}
-                className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                size="lg"
-              >
-                <Target className="w-5 h-5" />
-                开始目标训练
-              </Button>
-              <Button 
-                variant="outline" 
-                size="lg"
-                className="flex items-center gap-2"
-              >
-                <Play className="w-5 h-5" />
-                自由聊天模式
-              </Button>
+          </div>
+
+          {/* 训练模式入口 */}
+          <div className="mb-8 lg:mb-12 flex flex-col sm:flex-row gap-3 justify-center">
+            <div 
+              onClick={showTrainingSelector}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                minHeight: '48px',
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                zIndex: 20,
+                backgroundImage: 'linear-gradient(to right, #8b5cf6, #ec4899)',
+                backgroundColor: '#8b5cf6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                cursor: 'pointer',
+                userSelect: 'none',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <Target style={{ color: 'white', display: 'inline-block', width: '20px', height: '20px' }} />
+              <span style={{ color: 'white', fontWeight: 'bold', fontSize: '16px' }}>开始目标训练</span>
+            </div>
+            <div 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                minHeight: '48px',
+                padding: '12px 24px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                zIndex: 20,
+                backgroundColor: 'white',
+                color: '#8b5cf6',
+                border: '2px solid #8b5cf6',
+                borderRadius: '8px',
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                cursor: 'pointer',
+                userSelect: 'none',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#f3f4f6';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'white';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <Play style={{ color: '#8b5cf6', display: 'inline-block', width: '20px', height: '20px' }} />
+              <span style={{ color: '#8b5cf6', fontWeight: 'bold', fontSize: '16px' }}>自由聊天模式</span>
             </div>
           </div>
 
@@ -793,7 +880,7 @@ export default function App() {
                 size="sm" 
                 onClick={() => {
                   exitTrainingMode();
-                  setCurrentView('home');
+                  setCurrentView('training-selector');
                 }}
                 className="flex items-center gap-2 hover:bg-gray-100 transition-colors duration-200"
                 style={{
@@ -809,6 +896,21 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <Target className="w-5 h-5 text-blue-600" />
                 <span className="text-lg lg:text-xl font-semibold text-blue-800" style={{ fontWeight: '600' }}>{currentScenario.title}</span>
+              </div>
+            </div>
+            
+            {/* NPC信息显示 */}
+            <div className="flex items-center gap-3 mb-3 p-3 bg-white rounded-lg border border-gray-200">
+              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 flex-shrink-0">
+                <ImageWithFallback
+                  src={currentScenario.assets?.npcAvatar || ''}
+                  alt={currentScenario.roleCard.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900">{currentScenario.roleCard.name}</h3>
+                <p className="text-sm text-gray-600">{currentScenario.roleCard.role}</p>
               </div>
             </div>
             
@@ -851,7 +953,7 @@ export default function App() {
               <div
                 key={message.id}
                 className={`flex items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
-                  message.sender === 'user' ? 'justify-end' : message.sender === 'narrator' ? 'justify-center' : 'justify-start'
+                  message.sender === 'user' ? 'justify-end' : message.sender === 'narrator' ? 'justify-start' : 'justify-start'
                 }`}
                 style={{
                   animationDelay: `${index * 100}ms`,
@@ -862,7 +964,7 @@ export default function App() {
                 {message.sender === 'npc' && (
                   <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full overflow-hidden flex items-center justify-center bg-gray-100 flex-shrink-0">
                     <ImageWithFallback
-                      src={currentScenario.assets.npcAvatar}
+                      src={currentScenario.assets?.npcAvatar || ''}
                       alt={currentScenario.roleCard.name}
                       className="w-full h-full object-cover"
                     />
@@ -876,7 +978,7 @@ export default function App() {
                       : message.sender === 'ai'
                       ? 'w-80 lg:w-96 bg-blue-50 text-blue-900 border border-blue-200 rounded-lg rounded-bl-md'
                       : message.sender === 'narrator'
-                      ? 'w-full lg:w-[80%] mx-auto bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-center'
+                      ? 'w-full lg:w-[80%] bg-gray-50 text-gray-700 border border-gray-200 rounded-lg'
                       : 'w-80 lg:w-96 bg-cyan-50 text-gray-800 rounded-lg rounded-bl-md border border-cyan-200'
                   }`}
                   style={{
@@ -1141,6 +1243,22 @@ export default function App() {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+    );
+  }
+
+  // 训练场景选择器视图
+  if (currentView === 'training-selector') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4">
+        <div className="max-w-6xl mx-auto">
+
+          
+          <TrainingScenarioSelector
+            onScenarioSelect={handleTrainingScenarioSelect}
+            onBack={() => setCurrentView('home')}
+          />
+        </div>
       </div>
     );
   }

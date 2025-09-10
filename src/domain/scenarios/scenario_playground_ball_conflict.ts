@@ -136,6 +136,6 @@ export const playgroundBallConflictEasy: Scenario = {
   npcOpening: "喂，那球是我们在玩，你怎么把它拿走了？快还回来！",
   assets: {
     sceneImage: "/images-webp/scenes/playground.webp",
-    npcAvatar: "/images-webp/avatar/student_bob.webp",
+    npcAvatar: "/images-webp/avatar/student_john.webp",
   },
 };

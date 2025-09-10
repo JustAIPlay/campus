@@ -1,3 +1,4 @@
+/// <reference types="../vite-env" />
 import { create } from 'zustand';
 import type { Persona } from '../domain/scenarios/types';
 
@@ -12,6 +13,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   isTyping?: boolean;
+  sender?: 'npc' | 'user' | 'ai' | 'narrator';
 }
 
 // AI服务状态管理
@@ -363,13 +365,15 @@ export const generateMessageId = (): string => {
 export const createMessage = (
   role: 'user' | 'assistant' | 'system',
   content: string,
-  isTyping = false
+  isTyping = false,
+  sender: 'npc' | 'user' | 'ai' | 'narrator' = 'ai'
 ): ChatMessage => {
   return {
     id: generateMessageId(),
     role,
     content,
     timestamp: Date.now(),
-    isTyping
+    isTyping,
+    sender
   };
 };

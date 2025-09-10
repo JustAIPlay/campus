@@ -72,10 +72,13 @@ export interface SpeechStyle {
 }
 
 export interface Persona {
+  name?: string; // NPC名称
+  role?: string; // NPC角色
+  avatar?: string; // 头像路径
   age?: number; // 年龄
-  grade?: string; // 年级文字描述（如“二年级/五年级”）
+  grade?: string; // 年级文字描述（如"二年级/五年级"）
   mbti?: string; // 可选：MBTI 标签（仅作风格参考）
-  traits?: string[]; // 特质标签（如“直率、好胜、规则导向”）
+  traits?: string[]; // 特质标签（如"直率、好胜、规则导向"）
   sociability?: Sociability; // 社交倾向
   assertiveness?: Assertiveness; // 表达主张强度
   emotionBaseline?: EmotionBaseline; // 情绪基线
@@ -85,4 +88,5 @@ export interface Persona {
   lexiconPack?: LexiconPack; // 年龄适配词汇包
   catchphrases?: string[]; // 口头禅
   doNotSay?: string[]; // 禁用词或不符合年龄的表达
+  slangLevel?: number; // 俚语使用程度
 }
