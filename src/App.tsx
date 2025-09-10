@@ -382,7 +382,7 @@ const scenes = [
           '我头有点晕...',
           '谢谢你陪我来医务室',
           '我想给妈妈打电话',
-          '你能帮我请假吗？'
+          '我能帮我请假吗？'
         ]
       }
     ]
@@ -399,7 +399,7 @@ export default function App() {
   const [currentPhase, setCurrentPhase] = useState<PhaseKey>('opening');
   const [isTrainingMode, setIsTrainingMode] = useState(false);
   
-  const [chatMessages, setChatMessages] = useState<Array<{id: string, sender: 'npc' | 'user' | 'ai', content: string}>>([]);
+  const [chatMessages, setChatMessages] = useState<Array<{id: string, sender: 'npc' | 'user' | 'ai' | 'narrator', content: string}>>([]);
   const [showAIHelp, setShowAIHelp] = useState(false);
   const [userInput, setUserInput] = useState('');
   const [backgroundLoaded, setBackgroundLoaded] = useState(false);
@@ -444,12 +444,19 @@ export default function App() {
     setCurrentPhase('opening');
     setIsTrainingMode(true);
     
-    // 使用场景的启动提示作为初始消息
+    // 使用旁白+NPC开场作为初始消息（NPC优先使用第一人称 npcOpening）
+    const now = Date.now();
+    const npcOpening = scenario.npcOpening || '喂，你刚刚为什么把球拿走？那是我们在玩的。';
     setChatMessages([
       {
-        id: '1',
+        id: String(now),
+        sender: 'narrator',
+        content: `${scenario.sceneName} · 开场：${scenario.description}`
+      },
+      {
+        id: String(now + 1),
         sender: 'npc',
-        content: scenario.starterPrompt
+        content: npcOpening
       }
     ]);
     setCurrentView('training');
@@ -496,7 +503,7 @@ export default function App() {
 
       // 构建对话历史（转换格式）
       const conversationHistory: ChatMessage[] = chatMessages
-        .filter(msg => !msg.content.includes('正在思考中'))
+        .filter(msg => !msg.content.includes('正在思考中') && msg.sender !== 'narrator')
         .map(msg => ({
           id: msg.id,
           role: msg.sender === 'user' ? 'user' : 'assistant',
@@ -525,7 +532,8 @@ export default function App() {
           background: currentScenario.roleCard.background,
           scenario: currentScenario.title,
           currentPhase: currentPhaseConfig?.intent || currentPhase,
-          coachingTips: currentPhaseConfig?.coachingTips || []
+          coachingTips: currentPhaseConfig?.coachingTips || [],
+          persona: currentScenario.roleCard.persona
         };
         
         aiResponse = await aiService.sendMessage(conversationHistory, enhancedNpcInfo);
@@ -770,11 +778,15 @@ export default function App() {
   }
 
   if (currentView === 'training' && currentScenario) {
+    // 跳过旁白（仅在训练视图作用域内）
+    const skipNarrator = () => {
+      setChatMessages(prev => prev.filter(m => m.sender !== 'narrator'));
+    };
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 flex flex-col">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
         <div className="flex-1 max-w-md mx-auto lg:max-w-4xl w-full flex flex-col">
           {/* 训练头部 - 显示目标和进度 */}
-          <div className="bg-white/90 backdrop-blur-sm border-b p-4 lg:p-6">
+          <div className="bg-white/95 backdrop-blur-sm border-b border-blue-100 p-4 lg:p-6">
             <div className="flex items-center justify-between mb-3">
               <Button 
                 variant="ghost" 
@@ -783,33 +795,50 @@ export default function App() {
                   exitTrainingMode();
                   setCurrentView('home');
                 }}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 hover:bg-gray-100 transition-colors duration-200"
+                style={{
+                  ':hover': {
+                    backgroundColor: '#f3f4f6'
+                  }
+                }}
               >
                 <ArrowLeft className="w-4 h-4" />
                 退出训练
               </Button>
               
               <div className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-purple-600" />
-                <span className="font-semibold text-purple-800">{currentScenario.title}</span>
+                <Target className="w-5 h-5 text-blue-600" />
+                <span className="text-lg lg:text-xl font-semibold text-blue-800" style={{ fontWeight: '600' }}>{currentScenario.title}</span>
               </div>
             </div>
             
             {/* 训练目标展示 */}
-            <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg p-3 mb-3">
-              <h4 className="font-medium text-sm mb-2 text-purple-800">🎯 训练目标</h4>
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-3 mb-3 border border-blue-100">
+              <h4 className="font-medium text-sm mb-2 text-blue-800">🎯 训练目标</h4>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(currentScenario.objectives).map(([key, objective]) => (
-                  <Badge key={key} variant="secondary" className="text-xs">
+                {Object.entries(currentScenario.objectives).map(([key, objective], index) => (
+                  <div
+                    key={key}
+                    className={`px-3 py-1 rounded-full text-xs cursor-pointer transition-all duration-200 ${
+                      index === 0 
+                        ? 'bg-blue-500 text-white shadow-sm' 
+                        : 'bg-transparent border border-blue-500 text-blue-600 hover:bg-blue-50'
+                    }`}
+                    style={{
+                      backgroundColor: index === 0 ? '#4096ff' : 'transparent',
+                      borderColor: '#4096ff',
+                      color: index === 0 ? 'white' : '#4096ff'
+                    }}
+                  >
                     {(objective as Objective).description}
-                  </Badge>
+                  </div>
                 ))}
               </div>
             </div>
             
             {/* 阶段进度 */}
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">当前阶段:</span>
+              <span className="text-gray-500" style={{ color: '#888' }}>当前阶段:</span>
               <Badge variant="outline" className="bg-white">
                 {currentScenario.phases[currentPhase]?.intent || currentPhase}
               </Badge>
@@ -817,13 +846,17 @@ export default function App() {
           </div>
 
           {/* 聊天消息 */}
-          <div className="flex-1 p-4 lg:p-6 overflow-y-auto space-y-3 lg:space-y-4">
-            {chatMessages.map((message) => (
+          <div className="flex-1 overflow-y-auto space-y-3 lg:space-y-4" style={{ padding: '16px', marginTop: '24px' }}>
+            {chatMessages.map((message, index) => (
               <div
                 key={message.id}
-                className={`flex items-end gap-2 ${
-                  message.sender === 'user' ? 'justify-end' : 'justify-start'
+                className={`flex items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                  message.sender === 'user' ? 'justify-end' : message.sender === 'narrator' ? 'justify-center' : 'justify-start'
                 }`}
+                style={{
+                  animationDelay: `${index * 100}ms`,
+                  animationFillMode: 'both'
+                }}
               >
                 {/* NPC头像 - 左侧显示 */}
                 {message.sender === 'npc' && (
@@ -837,13 +870,19 @@ export default function App() {
                 )}
                 
                 <div
-                  className={`max-w-[75%] lg:max-w-[65%] rounded-2xl px-3 py-2 lg:px-4 lg:py-3 relative ${
+                  className={`px-3 py-2 lg:px-4 lg:py-3 relative shadow-sm ${
                     message.sender === 'user'
-                      ? 'bg-purple-500 text-white rounded-br-md'
+                      ? 'max-w-[75%] lg:max-w-[65%] bg-orange-50 text-gray-800 rounded-lg rounded-br-md border border-orange-200'
                       : message.sender === 'ai'
-                      ? 'bg-blue-100 text-blue-900 border border-blue-200 rounded-bl-md'
-                      : 'bg-white text-gray-900 rounded-bl-md border shadow-sm'
+                      ? 'w-80 lg:w-96 bg-blue-50 text-blue-900 border border-blue-200 rounded-lg rounded-bl-md'
+                      : message.sender === 'narrator'
+                      ? 'w-full lg:w-[80%] mx-auto bg-gray-50 text-gray-700 border border-gray-200 rounded-lg text-center'
+                      : 'w-80 lg:w-96 bg-cyan-50 text-gray-800 rounded-lg rounded-bl-md border border-cyan-200'
                   }`}
+                  style={{
+                    borderRadius: '8px',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                  }}
                 >
                   {message.sender === 'ai' && (
                     <div className="flex items-center gap-1 mb-1">
@@ -851,7 +890,15 @@ export default function App() {
                       <span className="text-xs lg:text-sm font-medium">AI助手建议</span>
                     </div>
                   )}
-                  <p className="text-sm lg:text-base leading-relaxed">{message.content}</p>
+                  {message.sender === 'narrator' && (
+                    <div className="flex items-center justify-between mb-1 text-xs text-gray-500">
+                      <span>旁白</span>
+                      {index === 0 && (
+                        <button onClick={skipNarrator} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">跳过旁白</button>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-sm lg:text-base text-gray-700" style={{ lineHeight: '1.5' }}>{message.content}</p>
                 </div>
                 
                 {/* 用户头像 - 右侧显示 */}
@@ -876,16 +923,23 @@ export default function App() {
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
                 placeholder="输入你的回应..."
-                className="flex-1 px-3 py-2 lg:px-4 lg:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm lg:text-base"
+                className="flex-1 px-3 py-2 lg:px-4 lg:py-3 border rounded-lg focus:outline-none text-sm lg:text-base transition-all duration-200"
+                style={{
+                  borderColor: userInput.trim() ? '#4096ff' : '#d1d5db',
+                  boxShadow: userInput.trim() ? '0 0 0 2px rgba(64, 150, 255, 0.1)' : 'none',
+                  transform: userInput.trim() ? 'scale(1.01)' : 'scale(1)'
+                }}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
               />
-              <Button 
-                onClick={sendMessage} 
-                disabled={!userInput.trim()}
-                className="lg:px-6 bg-purple-500 hover:bg-purple-600"
-              >
-                发送
-              </Button>
+              {userInput.trim() && (
+                <Button 
+                  onClick={sendMessage} 
+                  className="px-4 lg:px-6 py-2 lg:py-3 bg-purple-500 hover:bg-purple-600 text-white transition-all duration-200 animate-in slide-in-from-right-2"
+                  style={{ backgroundColor: '#8b5cf6', color: 'white' }}
+                >
+                  发送
+                </Button>
+              )}
             </div>
           </div>
         </div>
